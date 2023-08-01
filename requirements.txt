@@ -1,0 +1,27 @@
+coloredlogs==15.0.1
+flatbuffers==23.5.26
+humanfriendly==10.0
+mpmath==1.3.0
+numpy==1.25.1
+onnxruntime==1.15.1
+opencv-python==4.8.0.74
+packaging==23.1
+protobuf==4.23.4
+pyreadline3==3.4.1
+sympy==1.12
+
+pyyaml
+scipy
+# opencv-python
+# sklearn
+torch >= 0.4
+torchvision >= 0.1
+# pillow
+# vizer
+# argparse
+# ultralytics
+# python-dotenv
+# openpyxl
+# pytest-warnings
+easydict
+ipdb
