@@ -12,12 +12,12 @@ def compute_color_for_labels(label):
     return tuple(color)
 
 
-def draw_boxes(img, bbox, identities=None, bg_im=None, title={}, scale=1):
+def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}, scale=1):
     n_cars = len(identities)
     height, width, channels = img.shape
-    bg_width = width * 6 // 10 // n_cars
-    if bg_width > 150:
-        bg_width = 150
+    bg_width = width * 8 // 10 // n_cars
+    if bg_width > 600:
+        bg_width = 600
     bg_height = height // 15
     bg_im = cv2.resize(bg_im, (bg_width, bg_height))
     space = width // 10 // n_cars
@@ -80,9 +80,9 @@ def draw_boxes(img, bbox, identities=None, bg_im=None, title={}, scale=1):
         label = ""
 
         try:
-            label = str(title[str(box_id)]["number"]) + " " + title[str(box_id)]["name"]
+            label = str(titles[i]["number"]) + " " + titles[i]["name"]
         except:
-            label = "1 Speed"
+            label = "001 Speed"
 
         # if len(title) <= i:
         #     label = "1 Speed"

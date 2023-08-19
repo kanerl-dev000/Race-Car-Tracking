@@ -15,6 +15,10 @@ from qt_material import apply_stylesheet
 import sys, cv2, json
 from PyQt6 import QtCore, QtGui, QtWidgets
 
+from PyQt6.QtCore import Qt
+
+import time
+
 
 import win32api
 import win32con
@@ -54,6 +58,9 @@ class ConfirmationDialog(QDialog):
         # Set the current index of the QLabel
         self.current_index = index
 
+        self.scaleX = 1
+        self.scaleY = 1
+
     def delete_label(self):
         self.accept()
 
@@ -70,6 +77,7 @@ class Main_Window(QWidget):
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
         self.ui.import_btn.clicked.connect(self.main)
+        self.ui.close_btn.clicked.connect(self.handle_close)
         self.index = -1
         self.ui.edit_btn.clicked.connect(self.open_confirmation_dialog)
         self.width_source, self.height_source = (
@@ -87,10 +95,35 @@ class Main_Window(QWidget):
         self.mouse = [-1000, -1000]
         self.isMouseOver = False
 
+        self.ui.src.mousePressEvent = lambda event: self.get_cursor_coordinates(event)
+        self.scale = 5
+        self.cap = None
+        self.setMouseTracking(True)
+
+        self.carids = []
+        self.titles = []
+
+        self.bg_im = cv2.imread("./img/background.PNG")
+
+    def handle_close(self):
+        if self.cap:
+            self.cap.release()
+        self.close()
+
     def change_car_data(self):
         json_object = json.dumps(self.car_dict, indent=4)
         with open("car.json", "w") as outfile:
             outfile.write(json_object)
+
+    def get_cursor_coordinates(self, event):
+        self.x_pos, self.y_pos = event.pos().x(), event.pos().y()
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.mouse = [self.x_pos - 30, self.y_pos - 30]
+            self.isClick = True
+
+    def mouseMoveEvent(self, event):
+        self.x_pos, self.y_pos = event.pos().x(), event.pos().y()
+        self.mouse = [self.x_pos - 30, self.y_pos - 30]
 
     def sort_cars(self):
         with open("car.json") as fp:
@@ -118,45 +151,63 @@ class Main_Window(QWidget):
                 label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
                 label.setObjectName(f"label{i}")
                 label.setText(key + "\n" + self.car_dict[key])
-                label.mousePressEvent = lambda event, index=i: self.edit_label_text(
+                label.mousePressEvent = lambda event, index=i: self.select_label_text(
                     index
                 )  # Connect the clicked event to edit_label_text
                 self.labels.append(label)
 
-    def mousePoints(self, event):
-        # Left button mouse click event opencv
-        x, y = event.pos()
-        print(x, y)
-        if event.buttons() & QtCore.Qt.LeftButton:
-            self.mouse = [x // self.scale, y // self.scale]
-            self.isClick = True
-            print("Click")
-        if event == cv2.EVENT_MOUSEMOVE:
-            self.mouse = [x // self.scale, y // self.scale]
-
     def main(self):
         scale = 5
-        tracker = CarTrack(scale, self.isClick)
+        tracker = CarTrack(scale)
+        tracker.bg_im = self.bg_im
         self.arr_filename = QFileDialog.getOpenFileName(
             self, "Select Video", "", "Image Files(*.mp4 *avi)"
         )[0]
         if self.arr_filename != "":
             cap = cv2.VideoCapture(self.arr_filename)
-            while True:
+            self.cap = cap
+            self.isVideo = True
+            while self.isVideo:
                 ret, frame = cap.read()
+                # time.sleep(1)
                 if not ret:
                     break
+                height, width, channel = frame.shape
+                scaleX = width / self.width_source
+                scaleY = height / self.height_source
 
-                # self.mousePoints(event=)
+                titles = []
 
-                if self.isMouseOver:
-                    win32api.SetCursor(win32api.LoadCursor(0, win32con.IDC_SIZEALL))
-                else:
-                    win32api.SetCursor(win32api.LoadCursor(0, win32con.IDC_CROSS))
+                for index in self.carids:
+                    title = {
+                        "number": list(self.car_dict.keys())[index],
+                        "name": self.car_dict[list(self.car_dict.keys())[index]],
+                    }
+                    titles.append(title)
+
+                print(titles)
+
                 frame, self.isMouseOver = tracker.run(
-                    success=ret, frame=frame, mousepoint=self.mouse
+                    success=ret,
+                    frame=frame,
+                    mousepoint=[
+                        int(self.mouse[0] * scaleX),
+                        int(self.mouse[1] * scaleY),
+                    ],
+                    isClick=self.isClick,
+                    titles=titles,
                 )
-                print(self.isMouseOver)
+                if self.isMouseOver:
+                    self.ui.src.setCursor(
+                        QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+                    )
+                else:
+                    self.ui.src.setCursor(
+                        QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor)
+                    )
+
+                self.isClick = False
+
                 src_img = cv2.resize(frame, (self.width_source, self.height_source))
                 src_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2RGB)
                 temp_img = QImage(
@@ -175,31 +226,52 @@ class Main_Window(QWidget):
         self.saved_driver_name = self.car_dict[self.saved_car_num]
         self.saved_index = index
 
-    def clear_label_background_colors(self):
-        # Reset background color of all labels
-        for label in self.labels:
-            label.setStyleSheet(
-                "border: 2px solid green;\n"
-                "background-color: black;\n"
-                "color: white;\n"
-                "border-radius: 5px;\n"
-                "font-weight: bold;\n"
-                ""
-            )
-
-    def edit_label_text(self, index):
-        self.save_label_data(index)
-        self.clear_label_background_colors()  # Reset background color of all labels
+    def set_label_checked(self, index):
         self.labels[index].setStyleSheet(
-            "border: 2px solid green;\n"
-            "background-color: green;\n"  # Change background color of the clicked label
+            "border: 2px solid black;\n"
+            "background-color: green;\n"
             "color: white;\n"
             "border-radius: 5px;\n"
             "font-weight: bold;\n"
             ""
         )
-        self.ui.edit_btn.setEnabled(True)
-        self.ui.edit_btn.setStyleSheet("background-color: green; color: white;")
+
+    def set_label_unchecked(self, index):
+        self.labels[index].setStyleSheet(
+            "border: 2px solid green;\n"
+            "background-color: black;\n"
+            "color: white;\n"
+            "border-radius: 5px;\n"
+            "font-weight: bold;\n"
+            ""
+        )
+
+    def select_label_text(self, index):
+        print(list(self.car_dict.keys())[index])
+        print(self.car_dict[list(self.car_dict.keys())[index]])
+
+        print(self.carids)
+
+        if index in self.carids:
+            self.set_label_unchecked(index)
+            self.carids.remove(index)
+
+        else:
+            self.set_label_checked(index)
+            self.carids.append(index)
+
+        self.save_label_data(index)
+
+        if len(self.carids) == 1:
+            self.ui.edit_btn.setEnabled(True)
+            self.ui.edit_btn.setStyleSheet(
+                "background-color: green; color: white; border: 2px solid green;"
+            )
+        else:
+            self.ui.edit_btn.setEnabled(False)
+            self.ui.edit_btn.setStyleSheet(
+                "background-color: transparent; color: green; border: 2px solid green;"
+            )
 
     def open_confirmation_dialog(self):
         # Open the confirmation dialog with the saved data
@@ -228,4 +300,5 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     main_window = Main_Window()
     apply_stylesheet(app, theme="dark_teal.xml")
+    # sys.exit(app.exec())
     sys.exit(app.exec())

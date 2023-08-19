@@ -14,7 +14,7 @@ import time
 class CarTrack(object):
     def __init__(self):
         # Load the YOLOv8 model
-        self.model = YOLO("../weights/yolov8n.pt")
+        self.model = YOLO("../weights/best.pt")
         # Open the video file
         self.video_path = "../videos/1.mp4"
         self.mouse = [-1000, -1000]

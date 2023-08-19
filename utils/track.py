@@ -12,7 +12,7 @@ import time
 
 
 class CarTrack(object):
-    def __init__(self, scale, isCLick):
+    def __init__(self, scale):
         # Load the YOLOv8 model
         self.model = YOLO("../weights/yolov8n.pt")
         # Open the video file
@@ -20,7 +20,7 @@ class CarTrack(object):
         self.mouse = [-1000, -1000]
 
         self.isMouseOver = False
-        self.isClick = isCLick
+        self.isClick = True
 
         self.track_ids = []
         self.bufferID = []
@@ -31,6 +31,10 @@ class CarTrack(object):
         self.title = {}
 
         self.scale = scale
+
+        self.bg_im = None
+
+        self.ids = "hello"
 
     def __enter__(self):
         pass
@@ -55,24 +59,16 @@ class CarTrack(object):
                 minID = bufferID[0]
         return minID
 
-    def run(self, success=False, frame=None, mousepoint=None):
+    def run(
+        self, success=False, frame=None, mousepoint=None, isClick=None, titles=None
+    ):
         self.mouse = mousepoint
-
-        bg_im = cv2.imread("../img/background.PNG")
         img = None
 
         # Loop through the video frames
 
-        # print(4 % 3 == 1)
-        # starttime = time.time()
-        # if self.isMouseOver:
-        #     win32api.SetCursor(win32api.LoadCursor(0, win32con.IDC_SIZEALL))
-        # else:
-        #     win32api.SetCursor(win32api.LoadCursor(0, win32con.IDC_CROSS))
-        h, w, c = frame.shape
-
         if success:
-            img = cv2.resize(frame, (w // self.scale, h // self.scale))
+            img = frame
             # Run YOLOv8 tracking on the frame, persisting tracks between frames
             results = self.model.track(img, persist=True)
             boxes = results[0].boxes.xywh.cpu()
@@ -83,11 +79,11 @@ class CarTrack(object):
                 return frame
 
             ## Add target cars
-            if self.isClick:
+            if isClick:
                 for i, box in enumerate(boxes):
                     x1, y1, x2, y2 = self.xywh_to_xyxy(box)
 
-                    if self.mouse[0] in range(int(x1), int(x2)) and self.mouse[
+                    if mousepoint[0] in range(int(x1), int(x2)) and mousepoint[
                         1
                     ] in range(int(y1), int(y2)):
                         id = self.track_ids[i]
@@ -110,7 +106,7 @@ class CarTrack(object):
             ## Set Mouse State
             for i, box in enumerate(boxes):
                 x1, y1, x2, y2 = self.xywh_to_xyxy(box)
-                if self.mouse[0] in range(int(x1), int(x2)) and self.mouse[1] in range(
+                if mousepoint[0] in range(int(x1), int(x2)) and mousepoint[1] in range(
                     int(y1), int(y2)
                 ):
                     self.isMouseOver = True
@@ -126,14 +122,16 @@ class CarTrack(object):
             # img = frame
             img0 = frame
 
+            print(self.targetID)
+
             if len(self.targetID) > 0:
                 img0 = draw_boxes(
                     img=img0,
                     bbox=np.array(targetCars),
                     identities=self.targetID,
-                    bg_im=bg_im,
-                    title=self.title,
-                    scale=self.scale,
+                    bg_im=self.bg_im,
+                    titles=titles,
+                    scale=1,
                 )
             return img0, self.isMouseOver
         else:
