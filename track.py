@@ -5,8 +5,6 @@ import numpy as np
 
 from utils.draw import draw_boxes
 
-import time
-
 
 class CarTrack(object):
     def __init__(self):

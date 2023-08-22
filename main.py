@@ -19,6 +19,8 @@ from PyQt6.QtCore import Qt
 
 from track import CarTrack
 
+import ndi
+
 
 class ConfirmationDialog(QDialog):
     data_updated = QtCore.pyqtSignal(str, str)
@@ -90,7 +92,6 @@ class Main_Window(QWidget):
         self.isMouseOver = False
 
         self.ui.src.mousePressEvent = lambda event: self.get_cursor_coordinates(event)
-        self.scale = 5
         self.cap = None
         self.setMouseTracking(True)
 
@@ -156,11 +157,10 @@ class Main_Window(QWidget):
             self, "Select Video", "", "Image Files(*.mp4 *avi)"
         )[0]
         if self.arr_filename != "":
-            cap = cv2.VideoCapture(self.arr_filename)
-            self.cap = cap
+            self.cap = cv2.VideoCapture(self.arr_filename)
             self.isVideo = True
             while self.isVideo:
-                ret, frame = cap.read()
+                ret, frame = self.cap.read()
                 if not ret:
                     break
 
