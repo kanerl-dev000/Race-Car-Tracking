@@ -206,7 +206,7 @@ class Main_Window(QWidget):
             self.saved_driver_name = self.car_dict[self.saved_car_num]
             print(self.saved_car_num)
             print(self.saved_driver_name)
-            self.saved_index = index
+            self.saved_index = self.tracker.carids[0]
 
     def set_label_checked(self, index):
         self.labels[index].setStyleSheet(
@@ -293,6 +293,7 @@ class Main_Window(QWidget):
             )
             self.change_car_data()
         self.labels[index].setText(updated_car_num + "\n" + updated_driver_name)
+        self.sort_cars()
 
 
 if __name__ == "__main__":
