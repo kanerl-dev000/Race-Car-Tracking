@@ -40,9 +40,9 @@ class ConfirmationDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
-        delete_button = QPushButton("Delete", self)
-        delete_button.clicked.connect(self.delete_label)
-        button_box.addButton(delete_button, QDialogButtonBox.ButtonRole.RejectRole)
+        # delete_button = QPushButton("Delete", self)
+        # delete_button.clicked.connect(self.delete_label)
+        # button_box.addButton(delete_button, QDialogButtonBox.ButtonRole.RejectRole)
         layout.addWidget(button_box)
 
         button_box.accepted.connect(self.accept)
@@ -57,8 +57,8 @@ class ConfirmationDialog(QDialog):
         self.scaleX = 1
         self.scaleY = 1
 
-    def delete_label(self):
-        self.accept()
+    # def delete_label(self):
+    #     self.accept()
 
     def accept(self):
         updated_car_num = self.car_num_edit.text()
@@ -201,9 +201,12 @@ class Main_Window(QWidget):
 
     def save_label_data(self, index):
         # Save the data from the QLabel that was clicked
-        self.saved_car_num = list(self.car_dict.keys())[index]
-        self.saved_driver_name = self.car_dict[self.saved_car_num]
-        self.saved_index = index
+        if len(self.tracker.carids) > 0:
+            self.saved_car_num = list(self.car_dict.keys())[self.tracker.carids[0]]
+            self.saved_driver_name = self.car_dict[self.saved_car_num]
+            print(self.saved_car_num)
+            print(self.saved_driver_name)
+            self.saved_index = index
 
     def set_label_checked(self, index):
         self.labels[index].setStyleSheet(
