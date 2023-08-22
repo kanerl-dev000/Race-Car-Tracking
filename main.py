@@ -13,17 +13,11 @@ from ui_main import Ui_Dialog
 from PyQt6.QtGui import QImage, QPixmap
 from qt_material import apply_stylesheet
 import sys, cv2, json
-from PyQt6 import QtCore, QtGui, QtWidgets
+from PyQt6 import QtCore, QtGui
 
 from PyQt6.QtCore import Qt
 
-import time
-
-
-import win32api
-import win32con
-
-from utils.track import CarTrack
+from track import CarTrack
 
 
 class ConfirmationDialog(QDialog):
@@ -101,9 +95,10 @@ class Main_Window(QWidget):
         self.setMouseTracking(True)
 
         self.carids = []
-        self.titles = []
 
         self.bg_im = cv2.imread("./img/background.PNG")
+
+        self.tracker = CarTrack()
 
     def handle_close(self):
         if self.cap:
@@ -157,9 +152,6 @@ class Main_Window(QWidget):
                 self.labels.append(label)
 
     def main(self):
-        scale = 5
-        tracker = CarTrack(scale)
-        tracker.bg_im = self.bg_im
         self.arr_filename = QFileDialog.getOpenFileName(
             self, "Select Video", "", "Image Files(*.mp4 *avi)"
         )[0]
@@ -169,34 +161,21 @@ class Main_Window(QWidget):
             self.isVideo = True
             while self.isVideo:
                 ret, frame = cap.read()
-                # time.sleep(1)
                 if not ret:
                     break
+
                 height, width, channel = frame.shape
                 scaleX = width / self.width_source
                 scaleY = height / self.height_source
 
-                titles = []
+                self.tracker.mouse = [
+                    int(self.mouse[0] * scaleX),
+                    int(self.mouse[1] * scaleY),
+                ]
 
-                for index in self.carids:
-                    title = {
-                        "number": list(self.car_dict.keys())[index],
-                        "name": self.car_dict[list(self.car_dict.keys())[index]],
-                    }
-                    titles.append(title)
+                self.tracker.isClick = self.isClick
+                frame, self.isMouseOver = self.tracker.run(frame=frame)
 
-                print(titles)
-
-                frame, self.isMouseOver = tracker.run(
-                    success=ret,
-                    frame=frame,
-                    mousepoint=[
-                        int(self.mouse[0] * scaleX),
-                        int(self.mouse[1] * scaleY),
-                    ],
-                    isClick=self.isClick,
-                    titles=titles,
-                )
                 if self.isMouseOver:
                     self.ui.src.setCursor(
                         QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor)
@@ -247,22 +226,39 @@ class Main_Window(QWidget):
         )
 
     def select_label_text(self, index):
-        print(list(self.car_dict.keys())[index])
-        print(self.car_dict[list(self.car_dict.keys())[index]])
-
-        print(self.carids)
-
-        if index in self.carids:
+        if index in self.tracker.carids:
             self.set_label_unchecked(index)
-            self.carids.remove(index)
+            self.tracker.carids.remove(index)
+            index_to_remove = next(
+                (
+                    i
+                    for i, obj in enumerate(self.tracker.titles)
+                    if obj["index"] == index
+                ),
+                None,
+            )
+            if index_to_remove is not None:
+                removed_object = self.tracker.titles.pop(index_to_remove)
 
         else:
-            self.set_label_checked(index)
-            self.carids.append(index)
-
+            if (
+                len(self.tracker.targetID) == 0
+                or len(self.tracker.titles) - len(self.tracker.targetID) == 1
+            ):
+                self.set_label_checked(index)
+                self.tracker.carids.append(index)
+                title = {
+                    "index": index,
+                    "trackid": 0,
+                    "number": list(self.car_dict.keys())[index],
+                    "name": self.car_dict[list(self.car_dict.keys())[index]],
+                }
+                self.tracker.titles.append(title)
+            else:
+                print("Select the title!")
         self.save_label_data(index)
 
-        if len(self.carids) == 1:
+        if len(self.tracker.carids) == 1:
             self.ui.edit_btn.setEnabled(True)
             self.ui.edit_btn.setStyleSheet(
                 "background-color: green; color: white; border: 2px solid green;"
