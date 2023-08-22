@@ -93,7 +93,7 @@ def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}, scale=1):
             2,
         )
 
-        cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
+        # cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
 
     return img
 
