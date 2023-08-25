@@ -5,6 +5,8 @@ import numpy as np
 
 from utils.draw import draw_boxes
 
+import time
+
 
 class CarTrack(object):
     def __init__(self):
@@ -17,14 +19,12 @@ class CarTrack(object):
         self.isClick = True
 
         self.track_ids = []
-        self.bufferID = []
-        self.bufferBOX = []
 
         self.targetID = []
 
         self.titles = []
 
-        self.bg_im = cv2.imread("./img/background.PNG")
+        self.bg_im = cv2.imread("./img/background.png", cv2.IMREAD_UNCHANGED)
 
         self.ids = "hello"
 
@@ -42,22 +42,13 @@ class CarTrack(object):
         xx, yy, ww, hh = box
         return [xx - ww // 2, yy - hh // 2, xx + ww // 2, yy + hh // 2]
 
-    def chooseOneID(self):
-        minID = 0
-        minDistance = 100000
-        for bufferID in self.bufferID:
-            x, y, w, h = bufferID[1]
-            dist = (self.mouse[0] - x) ** 2 + (self.mouse[1] - y) ** 2
-            if minDistance > dist:
-                minDistance = dist
-                minID = bufferID[0]
-        return minID
-
     def run(self, frame=None):
+        start = time.time()
         # Loop through the video frames
         img = frame
         # Run YOLOv8 tracking on the frame, persisting tracks between frames
         results = self.model.track(img, persist=True)
+        print("Inference time:      ", time.time() - start)
         boxes = results[0].boxes.xywh.cpu()
         if not results[0].boxes.id == None:
             self.track_ids = results[0].boxes.id.int().cpu().tolist()
@@ -65,6 +56,7 @@ class CarTrack(object):
             return frame, self.isMouseOver
         ## Add target cars
         if self.isClick:
+            self.bufferID = []
             for i, box in enumerate(boxes):
                 x1, y1, x2, y2 = self.xywh_to_xyxy(box)
 
@@ -79,8 +71,6 @@ class CarTrack(object):
                         ):
                             print("Select title")
                         else:
-                            self.bufferID.append([id, box])
-                            id = self.chooseOneID()
                             self.targetID.append(id)
                             self.titles[len(self.targetID) - 1]["trackid"] = id
 
@@ -95,8 +85,8 @@ class CarTrack(object):
                             None,
                         )
                         if index_to_remove is not None:
-                            removed_object = self.titles.pop(index_to_remove)
-                            removed_carids = self.carids.pop(index_to_remove)
+                            self.titles.pop(index_to_remove)
+                            self.carids.pop(index_to_remove)
 
                         self.isClick = False
 
@@ -123,6 +113,7 @@ class CarTrack(object):
         for id in self.targetID:
             targetCars.append(boxes[self.track_ids.index(id)])
         img0 = frame
+        print("Track time before draw:      ", time.time() - start)
         if len(self.targetID) > 0:
             img0 = draw_boxes(
                 img=img0,
@@ -130,6 +121,6 @@ class CarTrack(object):
                 identities=self.targetID,
                 bg_im=self.bg_im,
                 titles=self.titles,
-                scale=1,
             )
+        print("Track time:      ", time.time() - start)
         return img0, self.isMouseOver

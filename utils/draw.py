@@ -1,6 +1,8 @@
 import numpy as np
 import cv2
 
+import time
+
 palette = (2**11 - 1, 2**15 - 1, 2**20 - 1)
 
 
@@ -12,18 +14,122 @@ def compute_color_for_labels(label):
     return tuple(color)
 
 
-def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}, scale=1):
-    n_cars = len(identities)
-    height, width, channels = img.shape
-    bg_width = width * 8 // 10 // n_cars
-    if bg_width > 600:
-        bg_width = 600
-    bg_height = height // 15
-    bg_im = cv2.resize(bg_im, (bg_width, bg_height))
-    space = width // 10 // n_cars
-    x_margin = width // 8
-    y_margin = height // 15
+def puttitlebox(
+    img,
+    bg_im,
+    bg_width,
+    bg_height,
+    x_margin,
+    y_margin,
+    space,
+    box,
+    index,
+    identities,
+    titles,
+):
+    x1, y1, w1, h1, box_id = [int(i) for i in box]
+    x2 = x1 + w1 // 2
+    y2 = y1 + h1 // 2
+    x1 = x1 - w1 // 2
+    y1 = y1 - h1 // 2
 
+    # Set title box coordinate
+    pdsx = x_margin + index * (bg_width + space)
+    pdsy = y_margin
+    # pdex = pdsx + bg_width
+    # pdey = bg_height + pdsy
+
+    # Extract the alpha channel from the bg_im and normalize it
+    alpha = bg_im[:, :, 3] / 255.0
+    alpha_inv = 1.0 - alpha
+
+    # Define the region where you want to place the overlay image
+    yy1, yy2 = pdsy, pdsy + bg_height
+    xx1, xx2 = pdsx, pdsx + bg_width
+    # For regions of interest in both images
+    for c in range(0, 3):
+        img[yy1:yy2, xx1:xx2, c] = (
+            alpha * bg_im[:, :, c] + alpha_inv * img[yy1:yy2, xx1:xx2, c]
+        )
+
+    points = [
+        ((x1 + x2) // 2, (y1 + y2) // 2),
+        ((xx2 + xx1) // 2 + 10, yy2),
+        ((xx2 + xx1) // 2 - 10, yy2),
+    ]
+
+    img = cv2.fillPoly(img, [np.array(points)], (240, 89, 177))
+
+    label_num = ""
+    label_driver = ""
+
+    index_of_title = next(
+        (
+            idx
+            for idx, title in enumerate(titles)
+            if title["trackid"] == identities[index]
+        ),
+        None,
+    )
+    try:
+        label_num = str(titles[index_of_title]["number"])
+        label_driver = titles[index_of_title]["name"]
+    except:
+        label_num = "01"
+        label_driver = "Driver"
+
+    t_size_num = cv2.getTextSize(label_num, cv2.FONT_HERSHEY_PLAIN, 3, 3)[0]
+    t_size_driver = cv2.getTextSize(label_driver, cv2.FONT_HERSHEY_PLAIN, 2, 3)[0]
+
+    cv2.putText(
+        img,
+        label_num,
+        (
+            pdsx + bg_width // 8 - t_size_num[0] // 2,
+            pdsy + bg_height // 2 + t_size_num[1] // 2,
+        ),
+        cv2.FONT_HERSHEY_PLAIN,
+        3,
+        [255, 255, 255],
+        3,
+    )
+    cv2.putText(
+        img,
+        label_driver,
+        (
+            pdsx + bg_width * 5 // 8 - t_size_driver[0] // 2,
+            pdsy + bg_height // 2 + t_size_driver[1] // 2,
+        ),
+        cv2.FONT_HERSHEY_PLAIN,
+        2,
+        [240, 89, 177],
+        3,
+    )
+    return img
+
+
+def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}):
+    start = time.time()
+    n_cars = len(identities)  # number of titles
+
+    # Ensure the main image is in 3 channel format
+    if img.shape[2] == 1:
+        img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+    # Resize bg_im as 1/scale
+    bg_scale = 3.5
+    bg_width = int(bg_im.shape[1] / bg_scale)
+    bg_height = int(bg_im.shape[0] / bg_scale)
+    bg_im = cv2.resize(bg_im, (bg_width, bg_height))
+
+    # spcae between titles
+    space = (img.shape[1] - bg_width * n_cars) // (n_cars + 1)
+
+    # Margin of title
+    x_margin = space
+    y_margin = img.shape[0] // 6
+
+    # Sort titles
     identities_reshape = np.array(identities).reshape(-1, 1)
     arr = np.hstack((bbox, identities_reshape))
     sorted_indices = np.argsort(arr[:, 0])
@@ -34,67 +140,21 @@ def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}, scale=1):
         identities.append(x[4])
 
     for i, box in enumerate(sorted_arr):
-        x1, y1, w1, h1, box_id = [int(i) for i in box]
-
-        x1 = int(scale * x1)
-        y1 = int(scale * y1)
-        w1 = int(scale * w1)
-        h1 = int(scale * h1)
-
-        x2 = x1 + w1 // 2
-        y2 = y1 + h1 // 2
-        x1 = x1 - w1 // 2
-        y1 = y1 - h1 // 2
-
-        # # put desciption part
-        pdsx = x_margin + i * (bg_width + space)
-        pdsy = y_margin
-        pdex = pdsx + bg_width
-        pdey = bg_height + pdsy
-
-        img[pdsy:pdey, pdsx:pdex] = bg_im
-        points = [
-            ((x1 + x2) // 2, (y1 + y2) // 2),
-            ((pdex + pdsx) // 2 + 5, pdey),
-            ((pdex + pdsx) // 2 - 5, pdey),
-        ]
-
-        img = cv2.fillPoly(img, [np.array(points)], (204, 207, 205))
-        # box text and bar
-        id = int(identities[i]) if identities is not None else 0
-        color = compute_color_for_labels(id)
-        label = ""
-
-        index_of_title = next(
-            (index for index, obj in enumerate(titles) if obj["trackid"] == box_id),
-            None,
-        )
-        try:
-            label = (
-                str(titles[index_of_title]["number"])
-                + " "
-                + titles[index_of_title]["name"]
-            )
-        except:
-            label = "001 Speed"
-
-        t_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-
-        cv2.putText(
+        img = puttitlebox(
             img,
-            label,
-            (
-                pdsx + bg_width // 2 - t_size[0] // 2,
-                pdsy + bg_height // 2 + t_size[1] // 2,
-            ),
-            cv2.FONT_HERSHEY_PLAIN,
-            2,
-            [255, 255, 255],
-            2,
+            bg_im,
+            bg_width,
+            bg_height,
+            x_margin,
+            y_margin,
+            space,
+            box,
+            i,
+            identities,
+            titles,
         )
 
-        # cv2.rectangle(img, (x1, y1), (x2, y2), color, 3)
-
+    print("Draw Box time:       ", time.time() - start)
     return img
 
 

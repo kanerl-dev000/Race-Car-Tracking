@@ -155,17 +155,23 @@ class Main_Window(QWidget):
                 self.labels.append(label)
 
     def main(self):
-        self.arr_filename = QFileDialog.getOpenFileName(
-            self, "Select Video", "", "Image Files(*.mp4 *avi)"
-        )[0]
-        if self.arr_filename != "":
-            self.cap = cv2.VideoCapture(self.arr_filename)
-            self.isVideo = True
+        ndi.initialize()
+        sources = ndi.find_sources()
+        if not sources:
+            print("No NDI sources found!")
+            ndi.destroy()
+            exit()
+
+        source = sources[0]
+        receiver = ndi.Receiver(
+            source_name=source.ndi_name,
+            color_format=ndi.NDIlib_recv_color_format_e_BGRX_BGRA,
+        )
+
+        try:
             while self.isVideo:
                 start = time.time()
-                ret, frame = self.cap.read()
-                if not ret:
-                    break
+                frame = receiver.capture_video()
 
                 height, width, channel = frame.shape
                 scaleX = width / self.width_source
@@ -178,8 +184,6 @@ class Main_Window(QWidget):
 
                 self.tracker.isClick = self.isClick
                 frame, self.isMouseOver = self.tracker.run(frame=frame)
-
-                print("Run time:      ", time.time() - start)
                 if self.isMouseOver:
                     self.ui.src.setCursor(
                         QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor)
@@ -206,6 +210,9 @@ class Main_Window(QWidget):
                 cv2.waitKey(1)
 
                 print("Time:        ", time.time() - start)
+        finally:
+            receiver.destroy()
+            ndi.destroy()
 
     def save_label_data(self, index):
         # Save the data from the QLabel that was clicked
