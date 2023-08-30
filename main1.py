@@ -181,13 +181,14 @@ class Main_Window(QWidget):
     def handle_close(self):
         if self.cap:
             self.cap.release()
-
-        if self.video_thread.isRunning():
-            self.video_thread.stop()
-            self.video_thread.wait()
+        if self.video_thread != None:
+            if self.video_thread.isRunning():
+                self.video_thread.stop()
+                self.video_thread.wait()
         self.close()
 
     def change_car_data(self):
+        print(self.car_dict)
         json_object = json.dumps(self.car_dict, indent=4)
         with open("car.json", "w") as outfile:
             outfile.write(json_object)
@@ -358,11 +359,12 @@ class Main_Window(QWidget):
         index = (
             self.sender().current_index
         )  # Get the index from the sender (ConfirmationDialog)
-        if updated_car_num != list(self.car_dict.keys())[index]:
-            self.car_dict[updated_car_num] = self.car_dict.pop(
-                list(self.car_dict.keys())[index]
-            )
-            self.change_car_data()
+        # if updated_car_num != list(self.car_dict.keys())[index]:
+        # self.car_dict[updated_car_num] = self.car_dict.pop(
+        #     list(self.car_dict.keys())[index]
+        # )
+        self.car_dict[updated_car_num] = updated_driver_name
+        self.change_car_data()
         self.labels[index].setText(updated_car_num + "\n" + updated_driver_name)
         self.sort_cars()
 

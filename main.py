@@ -127,6 +127,7 @@ class Main_Window(QWidget):
 
     def get_cursor_coordinates(self, event):
         self.x_pos, self.y_pos = event.pos().x(), event.pos().y()
+
         if event.button() == Qt.MouseButton.LeftButton:
             self.mouse = [self.x_pos - 30, self.y_pos - 30]
             self.isClick = True
