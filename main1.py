@@ -70,6 +70,78 @@ class ConfirmationDialog(QDialog):
         super().reject()
 
 
+class VideoThread(QThread):
+    changePixmap = pyqtSignal(QImage)
+
+    updateVariable = pyqtSignal(bool)
+
+    # updateCursor = pyqtSignal()
+
+    def __init__(
+        self,
+        ui,
+        tracker,
+        width_source,
+        height_source,
+        arr_filename,
+        mouse,
+        cap,
+        isMouseOver,
+    ):
+        super().__init__()
+        self.ui = ui
+        self.tracker = tracker
+        self.width_source = width_source
+        self.height_source = height_source
+        self.arr_filename = arr_filename
+        self.isVideo = True
+        self.isMouseOver = isMouseOver
+        self.cap = cap
+        self.mouse = mouse
+
+    def run(self):
+        self.cap = cv2.VideoCapture(self.arr_filename)
+        while self.isVideo:
+            ret, frame = self.cap.read()
+            if not ret:
+                break
+
+            print(self.mouse)
+            height, width, channel = frame.shape
+            scaleX = width / self.width_source
+            scaleY = height / self.height_source
+
+            self.tracker.mouse = [
+                int(self.mouse[0] * scaleX),
+                int(self.mouse[1] * scaleY),
+            ]
+
+            frame, self.isMouseOver = self.tracker.run(frame=frame)
+
+            self.updateVariable.emit(self.isMouseOver)
+
+            src_img = cv2.resize(frame, (self.width_source, self.height_source))
+            src_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2RGB)
+            temp_img = QImage(
+                src_img,
+                self.width_source,
+                self.height_source,
+                src_img.strides[0],
+                QImage.Format.Format_RGB888,
+            )
+            self.changePixmap.emit(temp_img)
+
+            cv2.waitKey(1)
+
+        self.cap.release()
+
+    def update_mouse(self, mouse):
+        self.mouse = mouse
+
+    def stop(self):
+        self.isVideo = False
+
+
 class Main_Window(QWidget):
     def __init__(self):
         super().__init__()
@@ -78,8 +150,7 @@ class Main_Window(QWidget):
         self.ui.import_btn.clicked.connect(self.main)
         self.ui.close_btn.clicked.connect(self.handle_close)
         self.index = -1
-        # self.ui.edit_btn.clicked.connect(self.open_confirmation_dialog)
-        self.ui.edit_btn.clicked.connect(self.dialog)
+        self.ui.edit_btn.clicked.connect(self.open_confirmation_dialog)
         self.width_source, self.height_source = (
             self.ui.src.width(),
             self.ui.src.height(),
@@ -93,7 +164,6 @@ class Main_Window(QWidget):
 
         self.isClick = False
         self.mouse = [-1000, -1000]
-        self.isMouseOver = False
 
         self.ui.src.mousePressEvent = lambda event: self.get_cursor_coordinates(event)
         self.cap = None
@@ -104,20 +174,17 @@ class Main_Window(QWidget):
         self.bg_im = cv2.imread("./img/background.PNG")
 
         self.tracker = CarTrack()
+        self.video_thread = None
 
-        self.thread = threading.Thread(target=self.open_confirmation_dialog)
-
-        # self.thread1 = threading.Thread(target=self.mouseMoveEvent)
-        # self.thread1.start()
-
-    def dialog(self):
-        self.thread.start()
+        self.isMouseOver = False
 
     def handle_close(self):
         if self.cap:
             self.cap.release()
-            # self.thread.join()
-            # self.thread1.join()
+
+        if self.video_thread.isRunning():
+            self.video_thread.stop()
+            self.video_thread.wait()
         self.close()
 
     def change_car_data(self):
@@ -127,13 +194,30 @@ class Main_Window(QWidget):
 
     def get_cursor_coordinates(self, event):
         self.x_pos, self.y_pos = event.pos().x(), event.pos().y()
+
         if event.button() == Qt.MouseButton.LeftButton:
             self.mouse = [self.x_pos - 30, self.y_pos - 30]
             self.isClick = True
+            self.tracker.isClick = True
 
     def mouseMoveEvent(self, event):
         self.x_pos, self.y_pos = event.pos().x(), event.pos().y()
         self.mouse = [self.x_pos - 30, self.y_pos - 30]
+        if self.video_thread != None:
+            self.video_thread.update_mouse(self.mouse)
+
+    # def updateCursor(self):
+
+    def updateVariable(self, isMouseover):
+        # self.tracker.isClick = True
+        self.isMouseOver = isMouseover
+        if self.isMouseOver:
+            self.ui.src.setCursor(
+                QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            )
+        else:
+            self.ui.src.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
+        self.isClick = False
 
     def sort_cars(self):
         with open("car.json") as fp:
@@ -171,48 +255,22 @@ class Main_Window(QWidget):
             self, "Select Video", "", "Image Files(*.mp4 *avi)"
         )[0]
         if self.arr_filename != "":
-            self.video_show()
-
-    def video_show(self):
-        self.cap = cv2.VideoCapture(self.arr_filename)
-        self.isVideo = True
-        while self.isVideo:
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-
-            height, width, channel = frame.shape
-            scaleX = width / self.width_source
-            scaleY = height / self.height_source
-
-            self.tracker.mouse = [
-                int(self.mouse[0] * scaleX),
-                int(self.mouse[1] * scaleY),
-            ]
-
-            self.tracker.isClick = self.isClick
-            frame, self.isMouseOver = self.tracker.run(frame=frame)
-
-            if self.isMouseOver:
-                self.ui.src.setCursor(
-                    QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-                )
-            else:
-                self.ui.src.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
-            self.isClick = False
-
-            src_img = cv2.resize(frame, (self.width_source, self.height_source))
-            src_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2RGB)
-            temp_img = QImage(
-                src_img,
+            self.video_thread = VideoThread(
+                self.ui,
+                self.tracker,
                 self.width_source,
                 self.height_source,
-                src_img.strides[0],
-                QImage.Format.Format_RGB888,
+                self.arr_filename,
+                self.mouse,
+                self.cap,
+                self.isMouseOver,
             )
-            self.ui.src.setPixmap(QPixmap.fromImage(temp_img))
+            self.video_thread.changePixmap.connect(self.set_image)
+            self.video_thread.updateVariable.connect(self.updateVariable)
+            self.video_thread.start()
 
-            cv2.waitKey(1)
+    def set_image(self, image):
+        self.ui.src.setPixmap(QPixmap.fromImage(image))
 
     def save_label_data(self, index):
         # Save the data from the QLabel that was clicked
@@ -295,8 +353,6 @@ class Main_Window(QWidget):
                 self.on_data_updated
             )  # Connect the signal to the slot
             confirm_dialog.exec()
-            # self.thread.join()
-            # print("end!!!!!!!!")
 
     def on_data_updated(self, updated_car_num, updated_driver_name):
         index = (

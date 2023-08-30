@@ -1,41 +1,45 @@
 import cv2
 import numpy as np
 
-# Load the main image and the title box image with transparency
-main_img = cv2.imread("./img/1.jpeg")
-overlay_img = cv2.imread(
-    "./img/background.png", cv2.IMREAD_UNCHANGED
-)  # Load with alpha channel
+from PIL import ImageFont, ImageDraw, Image
 
-print(overlay_img.shape[1])
+image = np.zeros((500, 500, 3), dtype=np.uint8)
 
-overlay_img = cv2.resize(
-    overlay_img, (overlay_img.shape[1] // 4, overlay_img.shape[0] // 4)
-)
-# Ensure the main image is in 3 channel format
-if main_img.shape[2] == 1:
-    main_img = cv2.cvtColor(main_img, cv2.COLOR_GRAY2BGR)
 
-# # Resize the overlay image to the desired dimensions
-# desired_width, desired_height = 100, 50
-# overlay_img = cv2.resize(overlay_img, (desired_width, desired_height))
+font_path = "./Font/AgencyFBBold.ttf"
 
-# Extract the alpha channel from the overlay image and normalize it
-alpha = overlay_img[:, :, 3] / 255.0
-alpha_inv = 1.0 - alpha
 
-# Define the region where you want to place the overlay image
-y1, y2 = 10, 10 + overlay_img.shape[0]
-x1, x2 = 10, 10 + overlay_img.shape[1]
+font = ImageFont.truetype(font_path, 62)
 
-# For regions of interest in both images
-for c in range(0, 3):
-    main_img[y1:y2, x1:x2, c] = (
-        alpha * overlay_img[:, :, c] + alpha_inv * main_img[y1:y2, x1:x2, c]
-    )
+img_pil = Image.fromarray(image)
+draw = ImageDraw.Draw(img_pil)
+b, g, r, a = 0, 255, 0, 0
+draw.text((50, 100), "Hello World", font=font, fill=(b, g, r, a))
 
-# Save or display the result
-cv2.imwrite("result_image.jpg", main_img)
-cv2.imshow("Overlayed Image", main_img)
-cv2.waitKey(0)
+image = np.array(img_pil)
+
+# text = "Hello, World!"
+# font_size = 30
+# thickness = 2
+# text_width, text_height = font.gettextsize(text, font_size, thickness)
+
+# Position of the text
+# x = int((image.shape[1] - text_width) / 2)
+# y = int((image.shape[0] + text_height) / 2)
+
+# Draw the text on the image
+# image = cv2.putText(
+#     image,
+#     text,
+#     (x, y),
+#     font_size,
+#     thickness,
+#     color=(255, 255, 255),
+#     line_type=cv2.LINE_AA,
+#     bottomLeftOrigin=True,
+# )
+
+# Display the resulting image
+cv2.imshow("res", image)
+cv2.waitKey()
 cv2.destroyAllWindows()

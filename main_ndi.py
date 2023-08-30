@@ -170,7 +170,6 @@ class Main_Window(QWidget):
 
         try:
             while self.isVideo:
-                start = time.time()
                 frame = receiver.capture_video()
 
                 height, width, channel = frame.shape
@@ -196,7 +195,6 @@ class Main_Window(QWidget):
 
                 src_img = cv2.resize(frame, (self.width_source, self.height_source))
                 src_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2RGB)
-                print("Set Cursor:      ", time.time() - start)
                 temp_img = QImage(
                     src_img,
                     self.width_source,
@@ -205,11 +203,9 @@ class Main_Window(QWidget):
                     QImage.Format.Format_RGB888,
                 )
                 self.ui.src.setPixmap(QPixmap.fromImage(temp_img))
-                print("Set Cursor:      ", time.time() - start)
 
                 cv2.waitKey(1)
 
-                print("Time:        ", time.time() - start)
         finally:
             receiver.destroy()
             ndi.destroy()
@@ -316,5 +312,4 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     main_window = Main_Window()
     apply_stylesheet(app, theme="dark_teal.xml")
-    # sys.exit(app.exec())
     sys.exit(app.exec())
