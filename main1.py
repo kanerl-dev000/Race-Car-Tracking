@@ -313,6 +313,9 @@ class Main_Window(QWidget):
                 None,
             )
             if index_to_remove is not None:
+                targetID = self.tracker.titles[index_to_remove]["trackid"]
+                if targetID in self.tracker.targetID:
+                    self.tracker.targetID.remove(targetID)
                 self.tracker.titles.pop(index_to_remove)
 
         else:
@@ -360,10 +363,21 @@ class Main_Window(QWidget):
             self.sender().current_index
         )  # Get the index from the sender (ConfirmationDialog)
         # if updated_car_num != list(self.car_dict.keys())[index]:
-        # self.car_dict[updated_car_num] = self.car_dict.pop(
-        #     list(self.car_dict.keys())[index]
-        # )
-        self.car_dict[updated_car_num] = updated_driver_name
+        #     self.car_dict[updated_car_num] = self.car_dict.pop(
+        #         list(self.car_dict.keys())[index]
+        #     )
+        ind = next(
+            (i for i, d in enumerate(self.tracker.titles) if d["index"] == index),
+            None,
+        )
+        if ind != None:
+            self.tracker.titles[ind]["number"] = updated_car_num
+            self.tracker.titles[ind]["name"] = updated_driver_name
+
+        items = list(self.car_dict.items())
+        items[index] = (updated_car_num, updated_driver_name)
+        self.car_dict = dict(items)
+        # self.car_dict[updated_car_num] = updated_driver_name
         self.change_car_data()
         self.labels[index].setText(updated_car_num + "\n" + updated_driver_name)
         self.sort_cars()

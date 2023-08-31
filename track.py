@@ -41,8 +41,20 @@ class CarTrack(object):
         xx, yy, ww, hh = box
         return [xx - ww // 2, yy - hh // 2, xx + ww // 2, yy + hh // 2]
 
+    def checktrackid(self, id):
+        for d in self.titles:
+            if id == d["trackid"]:
+                return True
+            else:
+                return False
+
+    def findNoneid(self):
+        for i, t in enumerate(self.titles):
+            if t["trackid"] not in self.targetID:
+                return i
+        return len(self.titles)
+
     def run(self, frame=None):
-        print("self.targetID2:   ", self.targetID)
         # Loop through the video frames
         img = frame
         # Run YOLOv8 tracking on the frame, persisting tracks between frames
@@ -53,9 +65,14 @@ class CarTrack(object):
         else:
             return frame, self.isMouseOver
         ## Add target cars
-        print("self.isClick:    ", self.isClick)
+        for title in self.titles:
+            if (
+                title["trackid"] in self.track_ids
+                and title["trackid"] not in self.targetID
+            ):
+                self.targetID.append(title["trackid"])
+
         if self.isClick:
-            print("self.targetID3:   ", self.targetID)
             for i, box in enumerate(boxes):
                 x1, y1, x2, y2 = self.xywh_to_xyxy(box)
 
@@ -71,13 +88,39 @@ class CarTrack(object):
                             print("Select title")
                         else:
                             self.targetID.append(id)
-                            self.titles[len(self.targetID) - 1]["trackid"] = id
+
+                            if self.checktrackid(id):
+                                break
+                            else:
+                                if len(self.titles) > len(self.targetID):
+                                    self.titles[len(self.targetID) - 1]["trackid"] = id
+                                else:
+                                    self.titles[self.findNoneid()]["trackid"] = id
+
+                            for i, d in enumerate(self.titles):
+                                if id == d["trackid"]:
+                                    break
+                                elif i == len(self.titles) - 1:
+                                    self.titles[len(self.targetID) - 1]["trackid"] = id
+
                             break
 
                     else:
                         self.targetID.remove(id)
+                        index = next(
+                            (
+                                i
+                                for i, d in enumerate(self.titles)
+                                if list(d.values())[0] == id
+                            ),
+                            None,
+                        )
+                        if index != None:
+                            self.titles[index]["trackid"] = 0
+
             self.isClick = False
-            print("self.targetID4:   ", self.targetID)
+        print("self.titles: ", self.titles)
+
         ## Check if there is target cars in boxes list
         j = 0
         while j < len(self.targetID):
@@ -85,7 +128,6 @@ class CarTrack(object):
                 self.targetID.pop(j)
             else:
                 j += 1
-        print("self.targetID5:   ", self.targetID)
         ## Set Mouse State
         for i, box in enumerate(boxes):
             x1, y1, x2, y2 = self.xywh_to_xyxy(box)
@@ -111,6 +153,4 @@ class CarTrack(object):
                 font_path_num=self.fontPath_num,
                 font_path_drive=self.fontPath_driver,
             )
-        print("self.targetID1:   ", self.targetID)
-        print("self.titles: ", self.titles)
         return img0, self.isMouseOver

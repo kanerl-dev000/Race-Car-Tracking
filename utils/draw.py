@@ -48,6 +48,8 @@ def puttitlebox(
 
     half = (endy - starty) // 2 + starty
     for y in range(starty, endy + 1):
+        if endy - starty == 0:
+            t = 0
         t = (y - starty) / (endy - starty)  # Calculate the ratio for gradient
 
         if y < half:
