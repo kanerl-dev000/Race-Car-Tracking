@@ -119,7 +119,6 @@ class CarTrack(object):
                             self.titles[index]["trackid"] = 0
 
             self.isClick = False
-        print("self.titles: ", self.titles)
 
         ## Check if there is target cars in boxes list
         j = 0

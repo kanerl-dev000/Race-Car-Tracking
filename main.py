@@ -43,9 +43,7 @@ class ConfirmationDialog(QDialog):
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
             self,
         )
-        # delete_button = QPushButton("Delete", self)
-        # delete_button.clicked.connect(self.delete_label)
-        # button_box.addButton(delete_button, QDialogButtonBox.ButtonRole.RejectRole)
+
         layout.addWidget(button_box)
 
         button_box.accepted.connect(self.accept)
@@ -70,6 +68,77 @@ class ConfirmationDialog(QDialog):
         super().reject()
 
 
+class VideoThread(QThread):
+    changePixmap = pyqtSignal(QImage)
+
+    updateVariable = pyqtSignal(bool)
+
+    # updateCursor = pyqtSignal()
+
+    def __init__(
+        self,
+        ui,
+        tracker,
+        width_source,
+        height_source,
+        arr_filename,
+        mouse,
+        cap,
+        isMouseOver,
+    ):
+        super().__init__()
+        self.ui = ui
+        self.tracker = tracker
+        self.width_source = width_source
+        self.height_source = height_source
+        self.arr_filename = arr_filename
+        self.isVideo = True
+        self.isMouseOver = isMouseOver
+        self.cap = cap
+        self.mouse = mouse
+
+    def run(self):
+        self.cap = cv2.VideoCapture(self.arr_filename)
+        while self.isVideo:
+            ret, frame = self.cap.read()
+            if not ret:
+                break
+
+            height, width, channel = frame.shape
+            scaleX = width / self.width_source
+            scaleY = height / self.height_source
+
+            self.tracker.mouse = [
+                int(self.mouse[0] * scaleX),
+                int(self.mouse[1] * scaleY),
+            ]
+
+            frame, self.isMouseOver = self.tracker.run(frame=frame)
+
+            self.updateVariable.emit(self.isMouseOver)
+
+            src_img = cv2.resize(frame, (self.width_source, self.height_source))
+            src_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2RGB)
+            temp_img = QImage(
+                src_img,
+                self.width_source,
+                self.height_source,
+                src_img.strides[0],
+                QImage.Format.Format_RGB888,
+            )
+            self.changePixmap.emit(temp_img)
+
+            cv2.waitKey(1)
+
+        self.cap.release()
+
+    def update_mouse(self, mouse):
+        self.mouse = mouse
+
+    def stop(self):
+        self.isVideo = False
+
+
 class Main_Window(QWidget):
     def __init__(self):
         super().__init__()
@@ -78,8 +147,7 @@ class Main_Window(QWidget):
         self.ui.import_btn.clicked.connect(self.main)
         self.ui.close_btn.clicked.connect(self.handle_close)
         self.index = -1
-        # self.ui.edit_btn.clicked.connect(self.open_confirmation_dialog)
-        self.ui.edit_btn.clicked.connect(self.dialog)
+        self.ui.edit_btn.clicked.connect(self.open_confirmation_dialog)
         self.width_source, self.height_source = (
             self.ui.src.width(),
             self.ui.src.height(),
@@ -93,7 +161,6 @@ class Main_Window(QWidget):
 
         self.isClick = False
         self.mouse = [-1000, -1000]
-        self.isMouseOver = False
 
         self.ui.src.mousePressEvent = lambda event: self.get_cursor_coordinates(event)
         self.cap = None
@@ -104,20 +171,17 @@ class Main_Window(QWidget):
         self.bg_im = cv2.imread("./img/background.PNG")
 
         self.tracker = CarTrack()
+        self.video_thread = None
 
-        self.thread = threading.Thread(target=self.open_confirmation_dialog)
-
-        # self.thread1 = threading.Thread(target=self.mouseMoveEvent)
-        # self.thread1.start()
-
-    def dialog(self):
-        self.thread.start()
+        self.isMouseOver = False
 
     def handle_close(self):
         if self.cap:
             self.cap.release()
-            # self.thread.join()
-            # self.thread1.join()
+        if self.video_thread != None:
+            if self.video_thread.isRunning():
+                self.video_thread.stop()
+                self.video_thread.wait()
         self.close()
 
     def change_car_data(self):
@@ -131,20 +195,35 @@ class Main_Window(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.mouse = [self.x_pos - 30, self.y_pos - 30]
             self.isClick = True
+            self.tracker.isClick = True
 
     def mouseMoveEvent(self, event):
         self.x_pos, self.y_pos = event.pos().x(), event.pos().y()
         self.mouse = [self.x_pos - 30, self.y_pos - 30]
+        if self.video_thread != None:
+            self.video_thread.update_mouse(self.mouse)
+
+    # def updateCursor(self):
+
+    def updateVariable(self, isMouseover):
+        # self.tracker.isClick = True
+        self.isMouseOver = isMouseover
+        if self.isMouseOver:
+            self.ui.src.setCursor(
+                QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor)
+            )
+        else:
+            self.ui.src.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
+        self.isClick = False
 
     def sort_cars(self):
-        with open("car.json") as fp:
-            elements = json.loads(fp.read())
-            sorted_data = sorted(elements.items(), key=lambda x: x[0])
-            self.car_dict = dict(sorted_data)
-            for i, key in enumerate(self.car_dict):
+        with open("car.json", "r") as file:
+            # Load the JSON data
+            self.car_dict = json.load(file)
+            for i, car in enumerate(self.car_dict):
                 label = QLabel(self)
                 label.setGeometry(
-                    QtCore.QRect(40 + (i % 8) * 130, 750 + int(i / 8) * 55, 110, 40)
+                    QtCore.QRect(40 + (i % 9) * 130, 760 + int(i / 9) * 55, 110, 40)
                 )
                 font = QtGui.QFont()
                 font.setBold(True)
@@ -161,7 +240,7 @@ class Main_Window(QWidget):
                 )
                 label.setAlignment(QtCore.Qt.AlignmentFlag.AlignCenter)
                 label.setObjectName(f"label{i}")
-                label.setText(key + "\n" + self.car_dict[key])
+                label.setText(car["number"] + "\n" + car["name"])
                 label.mousePressEvent = lambda event, index=i: self.select_label_text(
                     index
                 )  # Connect the clicked event to edit_label_text
@@ -172,54 +251,28 @@ class Main_Window(QWidget):
             self, "Select Video", "", "Image Files(*.mp4 *avi)"
         )[0]
         if self.arr_filename != "":
-            self.video_show()
-
-    def video_show(self):
-        self.cap = cv2.VideoCapture(self.arr_filename)
-        self.isVideo = True
-        while self.isVideo:
-            ret, frame = self.cap.read()
-            if not ret:
-                break
-
-            height, width, channel = frame.shape
-            scaleX = width / self.width_source
-            scaleY = height / self.height_source
-
-            self.tracker.mouse = [
-                int(self.mouse[0] * scaleX),
-                int(self.mouse[1] * scaleY),
-            ]
-
-            self.tracker.isClick = self.isClick
-            frame, self.isMouseOver = self.tracker.run(frame=frame)
-
-            if self.isMouseOver:
-                self.ui.src.setCursor(
-                    QtGui.QCursor(QtCore.Qt.CursorShape.PointingHandCursor)
-                )
-            else:
-                self.ui.src.setCursor(QtGui.QCursor(QtCore.Qt.CursorShape.ArrowCursor))
-            self.isClick = False
-
-            src_img = cv2.resize(frame, (self.width_source, self.height_source))
-            src_img = cv2.cvtColor(src_img, cv2.COLOR_BGR2RGB)
-            temp_img = QImage(
-                src_img,
+            self.video_thread = VideoThread(
+                self.ui,
+                self.tracker,
                 self.width_source,
                 self.height_source,
-                src_img.strides[0],
-                QImage.Format.Format_RGB888,
+                self.arr_filename,
+                self.mouse,
+                self.cap,
+                self.isMouseOver,
             )
-            self.ui.src.setPixmap(QPixmap.fromImage(temp_img))
+            self.video_thread.changePixmap.connect(self.set_image)
+            self.video_thread.updateVariable.connect(self.updateVariable)
+            self.video_thread.start()
 
-            cv2.waitKey(1)
+    def set_image(self, image):
+        self.ui.src.setPixmap(QPixmap.fromImage(image))
 
     def save_label_data(self, index):
         # Save the data from the QLabel that was clicked
         if len(self.tracker.carids) > 0:
-            self.saved_car_num = list(self.car_dict.keys())[self.tracker.carids[0]]
-            self.saved_driver_name = self.car_dict[self.saved_car_num]
+            self.saved_car_num = self.car_dict[self.tracker.carids[0]]["number"]
+            self.saved_driver_name = self.car_dict[self.tracker.carids[0]]["name"]
             self.saved_index = self.tracker.carids[0]
 
     def set_label_checked(self, index):
@@ -255,6 +308,9 @@ class Main_Window(QWidget):
                 None,
             )
             if index_to_remove is not None:
+                targetID = self.tracker.titles[index_to_remove]["trackid"]
+                if targetID in self.tracker.targetID:
+                    self.tracker.targetID.remove(targetID)
                 self.tracker.titles.pop(index_to_remove)
 
         else:
@@ -264,8 +320,8 @@ class Main_Window(QWidget):
                 title = {
                     "index": index,
                     "trackid": 0,
-                    "number": list(self.car_dict.keys())[index],
-                    "name": self.car_dict[list(self.car_dict.keys())[index]],
+                    "number": self.car_dict[index]["number"],
+                    "name": self.car_dict[index]["name"],
                 }
                 self.tracker.titles.append(title)
             # else:
@@ -296,18 +352,27 @@ class Main_Window(QWidget):
                 self.on_data_updated
             )  # Connect the signal to the slot
             confirm_dialog.exec()
-            # self.thread.join()
-            # print("end!!!!!!!!")
 
     def on_data_updated(self, updated_car_num, updated_driver_name):
         index = (
             self.sender().current_index
         )  # Get the index from the sender (ConfirmationDialog)
-        if updated_car_num != list(self.car_dict.keys())[index]:
-            self.car_dict[updated_car_num] = self.car_dict.pop(
-                list(self.car_dict.keys())[index]
-            )
-            self.change_car_data()
+        # if updated_car_num != list(self.car_dict.keys())[index]:
+        #     self.car_dict[updated_car_num] = self.car_dict.pop(
+        #         list(self.car_dict.keys())[index]
+        #     )
+        ind = next(
+            (i for i, d in enumerate(self.tracker.titles) if d["index"] == index),
+            None,
+        )
+        if ind != None:
+            self.tracker.titles[ind]["number"] = updated_car_num
+            self.tracker.titles[ind]["name"] = updated_driver_name
+
+        self.car_dict[index]["number"] = updated_car_num
+        self.car_dict[index]["name"] = updated_driver_name
+
+        self.change_car_data()
         self.labels[index].setText(updated_car_num + "\n" + updated_driver_name)
         self.sort_cars()
 
