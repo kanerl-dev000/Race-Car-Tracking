@@ -5,7 +5,7 @@ from ultralytics import YOLO
 import numpy as np
 
 model = YOLO("../weights/best.pt")
-cap = cv2.VideoCapture("./videos/4.mp4")
+cap = cv2.VideoCapture("./videos/1.mp4")
 
 while cap.isOpened():
     success, frame = cap.read()

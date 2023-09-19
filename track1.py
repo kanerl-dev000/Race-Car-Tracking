@@ -3,7 +3,7 @@ from ultralytics import YOLO
 
 import numpy as np
 
-from utils.draw import draw_boxes
+from utils.draw1 import draw_boxes
 
 
 class CarTrack(object):
@@ -144,7 +144,7 @@ class CarTrack(object):
             targetCars.append(boxes[self.track_ids.index(id)])
         img0 = frame
         if len(self.targetID) > 0:
-            img0, selfTitle = draw_boxes(
+            img0 = draw_boxes(
                 img=img0,
                 bbox=np.array(targetCars),
                 identities=self.targetID,
@@ -152,6 +152,4 @@ class CarTrack(object):
                 font_path_num=self.fontPath_num,
                 font_path_drive=self.fontPath_driver,
             )
-            print(selfTitle)
-            self.titles = selfTitle
         return img0, self.isMouseOver

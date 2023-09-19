@@ -19,6 +19,26 @@ def puttitlebox(
     font_path_num,
     font_path_drive,
 ):
+    label_num = ""
+    label_driver = ""
+    currentX = 0
+
+    index_of_title = next(
+        (
+            idx
+            for idx, title in enumerate(titles)
+            if title["trackid"] == identities[index]
+        ),
+        None,
+    )
+    try:
+        label_num = str(titles[index_of_title]["number"])
+        label_driver = titles[index_of_title]["name"]
+        currentX = titles[index_of_title]["currentX"]
+    except:
+        label_num = "01"
+        label_driver = "Driver"
+
     x1, y1, w1, h1, box_id = [int(i) for i in box]
     x2 = x1 + w1 // 2
     y2 = y1 + h1 // 2
@@ -28,6 +48,22 @@ def puttitlebox(
     # Set title box coordinate
     pdsx = x_margin + index * (bg_width + space)
     pdsy = y_margin
+
+    step = 0
+    targetx = x_margin + index * (bg_width + space)
+    dist = targetx - currentX
+
+    if abs(dist) < 12:
+        if abs(dist) < 5:
+            step = dist
+        else:
+            step = 4 * np.sign(dist)
+    else:
+        step = (dist) // 3
+
+    pdsx = currentX + step
+    currentX = pdsx
+    titles[index_of_title]["currentX"] = currentX
 
     # Define the region where you want to place the overlay image
     yy1 = pdsy
@@ -50,7 +86,8 @@ def puttitlebox(
     for y in range(starty, endy + 1):
         if endy - starty == 0:
             t = 0
-        t = (y - starty) / (endy - starty)  # Calculate the ratio for gradient
+        else:
+            t = (y - starty) / (endy - starty)  # Calculate the ratio for gradient
 
         if y < half:
             color = (
@@ -72,24 +109,6 @@ def puttitlebox(
             1,
         )
 
-    label_num = ""
-    label_driver = ""
-
-    index_of_title = next(
-        (
-            idx
-            for idx, title in enumerate(titles)
-            if title["trackid"] == identities[index]
-        ),
-        None,
-    )
-    try:
-        label_num = str(titles[index_of_title]["number"])
-        label_driver = titles[index_of_title]["name"]
-    except:
-        label_num = "01"
-        label_driver = "Driver"
-
     font_size1 = 60
     font_size2 = 50
 
@@ -105,15 +124,16 @@ def puttitlebox(
 
     text_length = t_size_num[0] + t_size_driver[0] + 20
 
-    draw.text(
-        (
-            pdsx + (bg_width - text_length) // 2,
-            pdsy - 5,
-        ),
-        label_num,
-        font=font1,
-        fill=(b, g, r, a),
-    )
+    # draw.text(
+    #     (
+    #         pdsx + (bg_width - text_length) // 2,
+    #         pdsy - 5,
+    #     ),
+    #     label_num,
+    #     font=font1,
+    #     fill=(b, g, r, a),
+    # )
+
     draw.text(
         (
             pdsx + (bg_width - text_length) // 2 + t_size_num[0] + 20,
@@ -126,7 +146,55 @@ def puttitlebox(
 
     img = np.array(img_pil)
 
-    return img
+    g_positionX = pdsx + (bg_width - text_length) // 2 - 25
+    g_positionY = pdsy + 5
+
+    png_image = cv2.imread(
+        f"./img/graphics/{titles[index_of_title]['gnName']}", cv2.IMREAD_UNCHANGED
+    )
+
+    img = put_graphics(
+        background=img,
+        png_image=png_image,
+        position=[g_positionX, g_positionY],
+    )
+
+    return img, titles
+
+
+def put_graphics(background, png_image, position):
+    scale = 4
+    png_image = cv2.resize(
+        png_image, (png_image.shape[1] // scale, png_image.shape[0] // scale)
+    )
+
+    # Extract the alpha channel from the PNG image
+    alpha_channel = png_image[:, :, 3]
+
+    # Find the dimensions of both images
+    png_height, png_width = png_image.shape[:2]
+
+    x_position, y_position = position
+    # Create a region of interest (ROI) for placing the PNG image
+    roi = background[
+        y_position : y_position + png_height, x_position : x_position + png_width
+    ]
+
+    # Use the alpha channel to blend the PNG image onto the background
+    for c in range(0, 3):
+        background[
+            y_position : y_position + png_height, x_position : x_position + png_width, c
+        ] = background[
+            y_position : y_position + png_height, x_position : x_position + png_width, c
+        ] * (
+            1 - alpha_channel / 255.0
+        ) + png_image[
+            :, :, c
+        ] * (
+            alpha_channel / 255.0
+        )
+
+    return background
 
 
 def draw_boxes(
@@ -163,7 +231,7 @@ def draw_boxes(
         identities.append(x[4])
 
     for i, box in enumerate(sorted_arr):
-        img = puttitlebox(
+        img, titles = puttitlebox(
             img,
             bg_width,
             x_margin,
@@ -176,4 +244,5 @@ def draw_boxes(
             font_path_num,
             font_path_drive,
         )
-    return img
+    print(titles)
+    return img, titles

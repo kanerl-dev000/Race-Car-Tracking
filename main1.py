@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QDialogButtonBox,
-    QPushButton,
 )
 from ui_main import Ui_Dialog
 from PyQt6.QtGui import QImage, QPixmap
@@ -17,12 +16,9 @@ from PyQt6 import QtCore, QtGui
 
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 
-from PyQt6.QtCore import QDir
-
-import os
-
 from track import CarTrack
 
+import threading
 
 import ndi
 
@@ -30,7 +26,7 @@ import time
 
 
 class ConfirmationDialog(QDialog):
-    data_updated = QtCore.pyqtSignal(str, str, str)
+    data_updated = QtCore.pyqtSignal(str, str)
 
     def __init__(self, car_num, driver_name, index, parent=None):
         super().__init__(parent)
@@ -42,11 +38,6 @@ class ConfirmationDialog(QDialog):
         self.driver_name_edit = QLineEdit(self)
         self.driver_name_edit.setText(driver_name)
         layout.addWidget(self.driver_name_edit)
-
-        # Add Import Button
-        self.import_button = QPushButton("Get Number Graphic", self)
-        self.import_button.clicked.connect(self.import_png)
-        layout.addWidget(self.import_button)
 
         button_box = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel,
@@ -67,24 +58,10 @@ class ConfirmationDialog(QDialog):
         self.scaleX = 1
         self.scaleY = 1
 
-        self.filename = ""
-
-    def import_png(self):
-        filePath, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open PNG File",
-            QDir.currentPath(),
-            "PNG Files (*.png);;All Files (*)",
-        )
-
-        if filePath:
-            self.filename = os.path.basename(filePath)
-            print(self.filename)
-
     def accept(self):
         updated_car_num = self.car_num_edit.text()
         updated_driver_name = self.driver_name_edit.text()
-        self.data_updated.emit(updated_car_num, updated_driver_name, self.filename)
+        self.data_updated.emit(updated_car_num, updated_driver_name)
         super().accept()
 
     def reject(self):
@@ -95,6 +72,8 @@ class VideoThread(QThread):
     changePixmap = pyqtSignal(QImage)
 
     updateVariable = pyqtSignal(bool)
+
+    # updateCursor = pyqtSignal()
 
     def __init__(
         self,
@@ -224,6 +203,8 @@ class Main_Window(QWidget):
         if self.video_thread != None:
             self.video_thread.update_mouse(self.mouse)
 
+    # def updateCursor(self):
+
     def updateVariable(self, isMouseover):
         # self.tracker.isClick = True
         self.isMouseOver = isMouseover
@@ -341,8 +322,6 @@ class Main_Window(QWidget):
                     "trackid": 0,
                     "number": self.car_dict[index]["number"],
                     "name": self.car_dict[index]["name"],
-                    "currentX": 0,
-                    "gnName": self.car_dict[index]["gnName"],
                 }
                 self.tracker.titles.append(title)
             # else:
@@ -374,7 +353,7 @@ class Main_Window(QWidget):
             )  # Connect the signal to the slot
             confirm_dialog.exec()
 
-    def on_data_updated(self, updated_car_num, updated_driver_name, filename):
+    def on_data_updated(self, updated_car_num, updated_driver_name):
         index = (
             self.sender().current_index
         )  # Get the index from the sender (ConfirmationDialog)
@@ -389,12 +368,9 @@ class Main_Window(QWidget):
         if ind != None:
             self.tracker.titles[ind]["number"] = updated_car_num
             self.tracker.titles[ind]["name"] = updated_driver_name
-            if filename != "":
-                self.tracker.titles[ind]["gnName"] = filename
 
         self.car_dict[index]["number"] = updated_car_num
         self.car_dict[index]["name"] = updated_driver_name
-        self.car_dict[index]["gnName"] = filename
 
         self.change_car_data()
         self.labels[index].setText(updated_car_num + "\n" + updated_driver_name)

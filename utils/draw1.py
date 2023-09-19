@@ -3,22 +3,12 @@ import cv2
 
 import time
 
-palette = (2**11 - 1, 2**15 - 1, 2**20 - 1)
-
-
-def compute_color_for_labels(label):
-    """
-    Simple function that adds fixed color depending on the class
-    """
-    color = [int((p * (label**2 - label + 1)) % 255) for p in palette]
-    return tuple(color)
+from PIL import ImageFont, ImageDraw, Image
 
 
 def puttitlebox(
     img,
-    bg_im,
     bg_width,
-    bg_height,
     x_margin,
     y_margin,
     space,
@@ -26,6 +16,8 @@ def puttitlebox(
     index,
     identities,
     titles,
+    font_path_num,
+    font_path_drive,
 ):
     x1, y1, w1, h1, box_id = [int(i) for i in box]
     x2 = x1 + w1 // 2
@@ -36,34 +28,16 @@ def puttitlebox(
     # Set title box coordinate
     pdsx = x_margin + index * (bg_width + space)
     pdsy = y_margin
-    # pdex = pdsx + bg_width
-    # pdey = bg_height + pdsy
-
-    # Extract the alpha channel from the bg_im and normalize it
-    alpha = bg_im[:, :, 3] / 255.0
-    alpha_inv = 1.0 - alpha
 
     # Define the region where you want to place the overlay image
-    yy1, yy2 = pdsy, pdsy + bg_height
+    yy1 = pdsy
     xx1, xx2 = pdsx, pdsx + bg_width
-    # For regions of interest in both images
-    for c in range(0, 3):
-        img[yy1:yy2, xx1:xx2, c] = (
-            alpha * bg_im[:, :, c] + alpha_inv * img[yy1:yy2, xx1:xx2, c]
-        )
 
     px0 = (x1 + x2) // 2
     py0 = (y1 + y2) // 2
     px1 = (xx2 + xx1) // 2 - 5
-    py1 = yy2
+    py1 = yy1 + 50
     px2 = px1 + 10
-    # py2 = py1
-
-    # points = [
-    #     (px0, py0),
-    #     (px2, py1),
-    #     (px1, py2),
-    # ]
 
     starty = py1
     endy = py0
@@ -74,20 +48,21 @@ def puttitlebox(
 
     half = (endy - starty) // 2 + starty
     for y in range(starty, endy + 1):
+        if endy - starty == 0:
+            t = 0
         t = (y - starty) / (endy - starty)  # Calculate the ratio for gradient
 
-        # print(t)
         if y < half:
             color = (
-                int(t * 200 + 50),
-                int(t * 200 + 50),
-                int(t * 200 + 50),
+                int(t * 170 + 80),
+                int(t * 170 + 80),
+                int(t * 170 + 80),
             )
         else:
             color = (
-                int((1 - t) * 200 + 50),
-                int((1 - t) * 200 + 50),
-                int((1 - t) * 200 + 50),
+                int((1 - t) * 170 + 80),
+                int((1 - t) * 170 + 80),
+                int((1 - t) * 170 + 80),
             )
         cv2.line(
             img,
@@ -96,8 +71,6 @@ def puttitlebox(
             color,
             1,
         )
-
-    # img = cv2.fillPoly(img, [np.array(points)], (150, 149, 146))
 
     label_num = ""
     label_driver = ""
@@ -117,49 +90,60 @@ def puttitlebox(
         label_num = "01"
         label_driver = "Driver"
 
-    t_size_num = cv2.getTextSize(label_num, cv2.FONT_HERSHEY_PLAIN, 2, 2)[0]
-    t_size_driver = cv2.getTextSize(label_driver, cv2.FONT_HERSHEY_PLAIN, 1.5, 2)[0]
+    font_size1 = 60
+    font_size2 = 50
 
-    cv2.putText(
-        img,
+    font1 = ImageFont.truetype(font_path_num, font_size1)
+    font2 = ImageFont.truetype(font_path_drive, font_size2)
+
+    img_pil = Image.fromarray(img)
+    draw = ImageDraw.Draw(img_pil)
+    b, g, r, a = 255, 255, 255, 0
+
+    t_size_num = (int(draw.textlength(label_num, font1)), font_size1)
+    t_size_driver = (int(draw.textlength(label_driver, font2)), font_size2)
+
+    text_length = t_size_num[0] + t_size_driver[0] + 20
+
+    draw.text(
+        (
+            pdsx + (bg_width - text_length) // 2,
+            pdsy - 5,
+        ),
         label_num,
-        (
-            pdsx + bg_width // 8 - t_size_num[0] // 2,
-            pdsy + bg_height // 2 + t_size_num[1] // 2,
-        ),
-        cv2.FONT_HERSHEY_PLAIN,
-        2,
-        [255, 255, 255],
-        2,
+        font=font1,
+        fill=(b, g, r, a),
     )
-    cv2.putText(
-        img,
+    draw.text(
+        (
+            pdsx + (bg_width - text_length) // 2 + t_size_num[0] + 20,
+            pdsy,
+        ),
         label_driver,
-        (
-            pdsx + bg_width * 5 // 8 - t_size_driver[0] // 2,
-            pdsy + bg_height // 2 + t_size_driver[1] // 2,
-        ),
-        cv2.FONT_HERSHEY_PLAIN,
-        1.5,
-        [255, 255, 255],
-        2,
+        font=font2,
+        fill=(b, g, r, a),
     )
+
+    img = np.array(img_pil)
+
     return img
 
 
-def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}):
-    start = time.time()
+def draw_boxes(
+    img,
+    bbox,
+    identities=None,
+    titles={},
+    font_path_num=None,
+    font_path_drive=None,
+):
     n_cars = len(identities)  # number of titles
 
     # Ensure the main image is in 3 channel format
     if img.shape[2] == 1:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
-    # Resize bg_im as 1/scale
-    bg_scale = 4.5
-    bg_width = int(bg_im.shape[1] / bg_scale)
-    bg_height = int(bg_im.shape[0] / bg_scale)
-    bg_im = cv2.resize(bg_im, (bg_width, bg_height))
+    bg_width = 200
 
     # spcae between titles
     space = (img.shape[1] - bg_width * n_cars) // (n_cars + 1)
@@ -181,9 +165,7 @@ def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}):
     for i, box in enumerate(sorted_arr):
         img = puttitlebox(
             img,
-            bg_im,
             bg_width,
-            bg_height,
             x_margin,
             y_margin,
             space,
@@ -191,10 +173,7 @@ def draw_boxes(img, bbox, identities=None, bg_im=None, titles={}):
             i,
             identities,
             titles,
+            font_path_num,
+            font_path_drive,
         )
     return img
-
-
-if __name__ == "__main__":
-    for i in range(82):
-        print(compute_color_for_labels(i))
